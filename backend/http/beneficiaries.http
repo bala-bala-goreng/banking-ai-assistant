@@ -1,0 +1,81 @@
+### Beneficiaries (favorites) — list, create-after-transfer rule, delete.
+### Self-contained: run top to bottom (includes the prerequisite transfer).
+
+### Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("token", response.body.accessToken);
+%}
+
+### Source account
+GET {{baseUrl}}/accounts
+Authorization: Bearer {{token}}
+
+> {%
+    client.global.set("accountId", response.body[0].id);
+%}
+
+### List favorites — "Budi" is seeded
+GET {{baseUrl}}/beneficiaries
+Authorization: Bearer {{token}}
+
+### Prerequisite: transfer to the destination we want to save (README §5.5 rule)
+POST {{baseUrl}}/transfers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "sourceAccountId": "{{accountId}}",
+  "destBankCode": "MANDIRI",
+  "destAccountNumber": "9988776655",
+  "destAccountName": "SITI AMINAH",
+  "amount": 50000,
+  "method": "BI_FAST",
+  "note": "first transfer before saving favorite",
+  "pin": "123456"
+}
+
+### Save it as a favorite → 201 (409 BENEFICIARY_EXISTS on a second run)
+POST {{baseUrl}}/beneficiaries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "alias": "Siti",
+  "bankCode": "MANDIRI",
+  "accountNumber": "9988776655",
+  "accountName": "SITI AMINAH"
+}
+
+> {%
+    if (response.status === 201) {
+        client.global.set("beneficiaryId", response.body.id);
+    }
+%}
+
+### Never-transferred destination → 400 NO_PRIOR_TRANSFER
+POST {{baseUrl}}/beneficiaries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "alias": "Unknown",
+  "bankCode": "BNI",
+  "accountNumber": "0000000001",
+  "accountName": "UNKNOWN PERSON"
+}
+
+### Delete the favorite created above → 204
+DELETE {{baseUrl}}/beneficiaries/{{beneficiaryId}}
+Authorization: Bearer {{token}}
+
+### Delete an unknown favorite → 404
+DELETE {{baseUrl}}/beneficiaries/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{token}}

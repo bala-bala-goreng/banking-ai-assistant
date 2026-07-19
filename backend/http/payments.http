@@ -1,0 +1,99 @@
+### Payments — IndiHome inquiry→pay and GoPay top-up. Self-contained: run top to bottom.
+### Transaction PIN (seeded): 123456.
+
+### Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("token", response.body.accessToken);
+%}
+
+### Source account
+GET {{baseUrl}}/accounts
+Authorization: Bearer {{token}}
+
+> {%
+    client.global.set("accountId", response.body[0].id);
+%}
+
+### IndiHome bill inquiry → captures inquiryId (single-use, expires in 10 min)
+POST {{baseUrl}}/payments/inquiry
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "biller": "INDIHOME",
+  "customerNumber": "130001234567"
+}
+
+> {%
+    client.global.set("inquiryId", response.body.inquiryId);
+%}
+
+### Pay the inquired bill (amount comes from the inquiry)
+### Running it a second time → 400 INQUIRY_INVALID (single-use)
+POST {{baseUrl}}/payments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "biller": "INDIHOME",
+  "inquiryId": "{{inquiryId}}",
+  "sourceAccountId": "{{accountId}}",
+  "pin": "123456"
+}
+
+### Inquiry for GoPay → 400 INQUIRY_NOT_SUPPORTED (it is a direct top-up)
+POST {{baseUrl}}/payments/inquiry
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "biller": "GOPAY",
+  "customerNumber": "081234567890"
+}
+
+### GoPay top-up (direct — no inquiry; Rp10.000–2.000.000, fee Rp1.000)
+POST {{baseUrl}}/payments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "biller": "GOPAY",
+  "customerNumber": "081234567890",
+  "amount": 50000,
+  "sourceAccountId": "{{accountId}}",
+  "pin": "123456"
+}
+
+### GoPay with an invalid phone → 400 INVALID_PHONE
+POST {{baseUrl}}/payments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "biller": "GOPAY",
+  "customerNumber": "9999",
+  "amount": 50000,
+  "sourceAccountId": "{{accountId}}",
+  "pin": "123456"
+}
+
+### GoPay below the minimum → 400 INVALID_AMOUNT
+POST {{baseUrl}}/payments
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "biller": "GOPAY",
+  "customerNumber": "081234567890",
+  "amount": 5000,
+  "sourceAccountId": "{{accountId}}",
+  "pin": "123456"
+}

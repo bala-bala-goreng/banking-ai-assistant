@@ -1,0 +1,45 @@
+### Auth — login, refresh, guard.
+### Select environment "local" (8080) or "local-8081" in the run toolbar.
+### Demo user (seeded): demo / password123.
+
+### Login → captures accessToken + refreshToken for every other .http file
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "password123"
+}
+
+> {%
+    client.test("login ok", function () {
+        client.assert(response.status === 200, "expected 200");
+    });
+    client.global.set("token", response.body.accessToken);
+    client.global.set("refreshToken", response.body.refreshToken);
+%}
+
+### Refresh tokens (rotation: both tokens are re-issued)
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+> {%
+    client.global.set("token", response.body.accessToken);
+    client.global.set("refreshToken", response.body.refreshToken);
+%}
+
+### Wrong password → 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "wrong-password"
+}
+
+### No token on a protected endpoint → 401
+GET {{baseUrl}}/accounts

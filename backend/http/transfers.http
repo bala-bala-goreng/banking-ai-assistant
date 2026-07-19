@@ -1,0 +1,92 @@
+### Transfers — options, execution, PIN & eligibility rules. Self-contained: run top to bottom.
+### Transaction PIN (seeded): 123456.
+
+### Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("token", response.body.accessToken);
+%}
+
+### Source account
+GET {{baseUrl}}/accounts
+Authorization: Bearer {{token}}
+
+> {%
+    client.global.set("accountId", response.body[0].id);
+%}
+
+### Eligible methods for a small amount → BI_FAST + ONLINE
+GET {{baseUrl}}/transfers/options?amount=15000
+Authorization: Bearer {{token}}
+
+### Large amount → RTGS only appears Mon–Fri 08:00–15:00 WIB
+GET {{baseUrl}}/transfers/options?amount=150000000
+Authorization: Bearer {{token}}
+
+### Execute a BI-FAST transfer (fee Rp2.500 is added to the debit)
+POST {{baseUrl}}/transfers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "sourceAccountId": "{{accountId}}",
+  "destBankCode": "MANDIRI",
+  "destAccountNumber": "9988776655",
+  "destAccountName": "SITI AMINAH",
+  "amount": 50000,
+  "method": "BI_FAST",
+  "note": "test via http client",
+  "pin": "123456"
+}
+
+### Wrong PIN → 400 INVALID_PIN, nothing debited
+POST {{baseUrl}}/transfers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "sourceAccountId": "{{accountId}}",
+  "destBankCode": "MANDIRI",
+  "destAccountNumber": "9988776655",
+  "destAccountName": "SITI AMINAH",
+  "amount": 50000,
+  "method": "BI_FAST",
+  "pin": "000000"
+}
+
+### Ineligible method → 400 METHOD_NOT_ELIGIBLE (15.000 is below the RTGS minimum)
+POST {{baseUrl}}/transfers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "sourceAccountId": "{{accountId}}",
+  "destBankCode": "MANDIRI",
+  "destAccountNumber": "9988776655",
+  "destAccountName": "SITI AMINAH",
+  "amount": 15000,
+  "method": "RTGS",
+  "pin": "123456"
+}
+
+### Amount above balance → 400 INSUFFICIENT_BALANCE
+POST {{baseUrl}}/transfers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "sourceAccountId": "{{accountId}}",
+  "destBankCode": "MANDIRI",
+  "destAccountNumber": "9988776655",
+  "destAccountName": "SITI AMINAH",
+  "amount": 200000000,
+  "method": "BI_FAST",
+  "pin": "123456"
+}

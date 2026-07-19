@@ -1,0 +1,31 @@
+### Accounts — balances and ledger history. Self-contained: run top to bottom.
+
+### Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("token", response.body.accessToken);
+%}
+
+### My accounts → captures the first (SAVINGS) account id
+GET {{baseUrl}}/accounts
+Authorization: Bearer {{token}}
+
+> {%
+    client.assert(response.body.length > 0, "expected at least one account");
+    client.global.set("accountId", response.body[0].id);
+%}
+
+### Transaction history (paginated ledger, newest first)
+GET {{baseUrl}}/accounts/{{accountId}}/transactions?page=0&size=10
+Authorization: Bearer {{token}}
+
+### Another user's / unknown account → 404 (existence is not leaked)
+GET {{baseUrl}}/accounts/00000000-0000-0000-0000-000000000000/transactions
+Authorization: Bearer {{token}}

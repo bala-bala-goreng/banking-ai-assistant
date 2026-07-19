@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: banking-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/bankdb}
+    username: ${SPRING_DATASOURCE_USERNAME:bank}
+    password: ${SPRING_DATASOURCE_PASSWORD:bank}
+  jpa:
+    hibernate:
+      ddl-auto: none          # Flyway owns the schema
+    open-in-view: false
+  flyway:
+    enabled: true
+
+server:
+  port: 8080
+
+app:
+  jwt:
+    # HMAC-SHA256 key — must be at least 32 characters
+    secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef}
+    access-ttl-minutes: 15
+    refresh-ttl-days: 7
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

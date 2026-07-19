@@ -30,6 +30,7 @@ A mobile banking **prototype** (Android, React Native) inspired by Permata Bank'
 10. [Repository Structure](#10-repository-structure)
 11. [Development Roadmap](#11-development-roadmap)
 12. [Security Notes](#12-security-notes)
+13. [Running Locally (Docker)](#13-running-locally-docker)
 
 ---
 
@@ -133,7 +134,7 @@ In the standard MCP pattern there are three roles:
 | Concern | Choice |
 |---|---|
 | Database | PostgreSQL 16 + **pgvector** (Docker image `pgvector/pgvector:pg16`) |
-| Local orchestration | `docker-compose` (postgres + backend + mcp-server; Ollama on host for GPU access) |
+| Local orchestration | `docker compose` in the [docker/](docker/) folder — postgres + backend today, mcp-server in later phases; Ollama via `--profile ai` (or on host for GPU access) |
 | API docs | springdoc-openapi (Swagger UI) |
 
 ---
@@ -725,7 +726,9 @@ banking-ai-assistant/
 │       └── assistant/         ← orchestrator, Spring AI config, SSE
 ├── mcp-server/                ← Spring AI MCP Server (tools)
 │   └── src/main/java/...
-└── docker-compose.yml         ← postgres + backend + mcp-server
+└── docker/                    ← local environment (docker compose)
+    ├── docker-compose.yml     ← postgres (pgvector) + backend (+ ollama via --profile ai)
+    └── .env.example
 ```
 
 ---
@@ -734,10 +737,10 @@ banking-ai-assistant/
 
 ```mermaid
 flowchart LR
-    P1["Phase 1<br/>Backend core<br/>auth, accounts,<br/>transfers, payments,<br/>beneficiaries, seed data"]
-    P2["Phase 2<br/>Mobile app<br/>4 tabs, all manual flows,<br/>Permata-style UI"]
-    P3["Phase 3<br/>AI foundation<br/>Ollama + model selection,<br/>MCP server + read tools,<br/>KB ingestion + guardrails"]
-    P4["Phase 4<br/>Agentic assistant<br/>orchestrator, SSE chat,<br/>intents + deeplinks"]
+    P1["Phase 1 ✅<br/>Backend core<br/>auth, accounts,<br/>transfers, payments,<br/>beneficiaries, seed data"]
+    P2["Phase 2<br/>AI foundation<br/>Ollama + model selection,<br/>MCP server + read tools,<br/>KB ingestion + guardrails"]
+    P3["Phase 3<br/>Agentic assistant<br/>orchestrator, SSE chat,<br/>intents + deeplinks<br/>(tested via API)"]
+    P4["Phase 4<br/>Mobile app<br/>4 tabs, manual flows +<br/>assistant chat, Permata-style UI"]
     P5["Phase 5<br/>Polish<br/>chat history UI, edge cases,<br/>demo script"]
     P1 --> P2 --> P3 --> P4 --> P5
 ```
@@ -745,10 +748,12 @@ flowchart LR
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
 | 1 | Backend core + Swagger + seeded demo users/accounts | All flows executable via Swagger; ledger consistent |
-| 2 | Mobile app with manual flows | Login → view accounts → pay IndiHome/GoPay → all 3 transfer types → save favorite, end-to-end on a device |
-| 3 | AI foundation | MCP tools callable and user-scoped; model answers balance questions correctly; KB questions answered from pgvector; off-topic questions refused by the guardrail gate |
-| 4 | Agentic assistant | The full §6.2 scenario works: chat → options with fees → "1" → deeplink → prefilled screen → PIN → executed |
+| 2 | AI foundation | MCP tools callable and user-scoped; model answers balance questions correctly; KB questions answered from pgvector; off-topic questions refused by the guardrail gate |
+| 3 | Agentic assistant | The full §6.2 scenario works over the API: chat via SSE (curl) → options with fees → "1" → intent created + deeplink returned |
+| 4 | Mobile app | Login → accounts → pay IndiHome/GoPay → all 3 transfer types → favorites → assistant chat with deeplink prefill, end-to-end on a device |
 | 5 | Polish | Streaming UX smooth, intents expire correctly, demo recordable |
+
+> **Order rationale** — backend and AI layers come first because every deliverable is testable via Swagger/curl without a UI; the mobile app then consumes a finished API in Phase 4.
 
 ---
 
@@ -764,6 +769,44 @@ Even as a prototype, these rules are enforced by design:
 - **Prompt-injection containment** — tool results are data, not instructions; the system prompt instructs the model to treat beneficiary names/notes as untrusted content.
 - **Scope guardrails in code, not prompts** — free-form questions pass an intent classifier and a retrieval-similarity gate in the orchestrator *before* any LLM generation; off-topic requests receive a canned refusal and never enter the agent loop ([§6.5](#65-knowledge-base--guardrails)).
 - Standard hygiene: BCrypt for password/PIN hashes, JWT expiry + refresh rotation, parameterized queries via JPA.
+
+---
+
+## 13. Running Locally (Docker)
+
+Everything needed for local development lives in the [docker/](docker/) folder:
+
+```bash
+cd docker
+cp .env.example .env        # optional — the defaults work out of the box
+docker compose up --build
+```
+
+| Service | URL | Notes |
+|---|---|---|
+| Backend API | http://localhost:8080 | Spring Boot |
+| Swagger UI | http://localhost:8080/swagger-ui.html | Every Phase-1 endpoint is testable here |
+| PostgreSQL + pgvector | localhost:5432 | db `bankdb`, user/pass `bank`/`bank` |
+| Ollama (Phase 2+) | http://localhost:11434 | Only with `docker compose --profile ai up` |
+
+**Demo credentials** (seeded automatically on first start): username `demo`, password `password123`, transaction PIN `123456`.
+
+Smoke test:
+
+```bash
+TOKEN=$(curl -s localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo","password":"password123"}' | jq -r .accessToken)
+
+curl -s localhost:8080/api/v1/accounts -H "Authorization: Bearer $TOKEN" | jq
+curl -s "localhost:8080/api/v1/transfers/options?amount=15000" -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Notes:
+
+- Postgres runs the `pgvector/pgvector:pg16` image, so the vector extension for the Phase-2 knowledge base is already in place.
+- The Ollama service is opt-in (`--profile ai`); with a GPU it is usually better installed on the host (see §2). Pull models with `docker exec bank-ollama ollama pull qwen2.5:7b-instruct` (and `bge-m3` for the KB).
+- Reset all data with `docker compose down -v`.
 
 ---
 
