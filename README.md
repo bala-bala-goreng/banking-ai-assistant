@@ -738,9 +738,9 @@ banking-ai-assistant/
 ```mermaid
 flowchart LR
     P1["Phase 1 ✅<br/>Backend core<br/>auth, accounts,<br/>transfers, payments,<br/>beneficiaries, seed data"]
-    P2["Phase 2<br/>AI foundation<br/>Ollama + model selection,<br/>MCP server + read tools,<br/>KB ingestion + guardrails"]
-    P3["Phase 3<br/>Agentic assistant<br/>orchestrator, SSE chat,<br/>intents + deeplinks<br/>(tested via API)"]
-    P4["Phase 4<br/>Mobile app<br/>4 tabs, manual flows +<br/>assistant chat, Permata-style UI"]
+    P2["Phase 2 ✅<br/>Mobile app<br/>4 tabs, manual flows,<br/>Permata-style UI<br/>(Assistant tab = stub)"]
+    P3["Phase 3<br/>AI foundation<br/>Ollama + model selection,<br/>MCP server + read tools,<br/>KB ingestion + guardrails"]
+    P4["Phase 4<br/>Agentic assistant<br/>orchestrator, SSE chat,<br/>intents + deeplinks,<br/>assistant chat UI in app"]
     P5["Phase 5<br/>Polish<br/>chat history UI, edge cases,<br/>demo script"]
     P1 --> P2 --> P3 --> P4 --> P5
 ```
@@ -748,12 +748,12 @@ flowchart LR
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
 | 1 | Backend core + Swagger + seeded demo users/accounts | All flows executable via Swagger; ledger consistent |
-| 2 | AI foundation | MCP tools callable and user-scoped; model answers balance questions correctly; KB questions answered from pgvector; off-topic questions refused by the guardrail gate |
-| 3 | Agentic assistant | The full §6.2 scenario works over the API: chat via SSE (curl) → options with fees → "1" → intent created + deeplink returned |
-| 4 | Mobile app | Login → accounts → pay IndiHome/GoPay → all 3 transfer types → favorites → assistant chat with deeplink prefill, end-to-end on a device |
+| 2 | Mobile app (manual flows) | Login → accounts → pay IndiHome/GoPay → all 3 transfer types → favorites, end-to-end on a device; Assistant tab is a placeholder; `bankapp://` deeplink routes registered |
+| 3 | AI foundation | MCP tools callable and user-scoped; model answers balance questions correctly; KB questions answered from pgvector; off-topic questions refused by the guardrail gate |
+| 4 | Agentic assistant | The full §6.2 scenario works end-to-end: assistant chat (SSE) → options with fees → "1" → intent created + deeplink opens the pre-filled Transfer screen in the app |
 | 5 | Polish | Streaming UX smooth, intents expire correctly, demo recordable |
 
-> **Order rationale** — backend and AI layers come first because every deliverable is testable via Swagger/curl without a UI; the mobile app then consumes a finished API in Phase 4.
+> **Order rationale** — the mobile app moved ahead of the AI layers (decided 2026-07-19): all manual flows are buildable against the finished Phase-1 API, and having the real app in hand makes the AI phases (deeplinks, chat UX) testable in situ instead of only via curl.
 
 ---
 
@@ -787,7 +787,7 @@ docker compose up --build
 | Backend API | http://localhost:8080 | Spring Boot |
 | Swagger UI | http://localhost:8080/swagger-ui.html | Every Phase-1 endpoint is testable here |
 | PostgreSQL + pgvector | localhost:5432 | db `bankdb`, user/pass `bank`/`bank` |
-| Ollama (Phase 2+) | http://localhost:11434 | Only with `docker compose --profile ai up` |
+| Ollama (Phase 3+) | http://localhost:11434 | Only with `docker compose --profile ai up` |
 
 **Demo credentials** (seeded automatically on first start): username `demo`, password `password123`, transaction PIN `123456`.
 
@@ -804,7 +804,20 @@ curl -s "localhost:8080/api/v1/transfers/options?amount=15000" -H "Authorization
 
 Notes:
 
-- Postgres runs the `pgvector/pgvector:pg16` image, so the vector extension for the Phase-2 knowledge base is already in place.
+**Mobile app** (requires a local Android SDK + emulator or device):
+
+```bash
+cd mobile
+npm install
+npm run android          # builds and launches on the connected emulator/device
+```
+
+- The app talks to the backend at `http://10.0.2.2:8080` (Android emulator alias for the host); for a physical device change `API_BASE_URL` in `mobile/src/config.ts` to your machine's LAN IP.
+- Test a deeplink: `adb shell am start -a android.intent.action.VIEW -d "bankapp://transfer"`
+
+Other notes:
+
+- Postgres runs the `pgvector/pgvector:pg16` image, so the vector extension for the Phase-3 knowledge base is already in place.
 - The Ollama service is opt-in (`--profile ai`); with a GPU it is usually better installed on the host (see §2). Pull models with `docker exec bank-ollama ollama pull qwen2.5:7b-instruct` (and `bge-m3` for the KB).
 - Reset all data with `docker compose down -v`.
 
